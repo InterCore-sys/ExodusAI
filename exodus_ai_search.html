@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ExodusAI - Grounded Search</title>
+    <!-- Load Tailwind CSS --><script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Google Fonts --><link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@300;400;700&family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Custom Tailwind Configuration --><script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'exodus-dark': '#0f172a', // Slate-900 like for text/elements
+                        'exodus-light': '#e2e8f0', // Slate-200 like
+                        'exodus-accent': '#3b82f6', // Blue-500
+                        'exodus-accent-hover': '#2563eb', // Blue-600
+                        'glass-blue-start': '#bfdbfe', // Light blue for gradient start (Blue-200)
+                        'glass-blue-end': '#dbeafe',   // Even lighter blue for gradient end (Blue-100)
+                    },
+                    fontFamily: {
+                        sans: ['Exo 2', 'sans-serif'], // General body font
+                        display: ['Orbitron', 'sans-serif'], // For the ExodusAI title
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Apply custom font globally and gradient background */
+        body {
+            font-family: 'Exo 2', sans-serif; /* General body font */
+            background: linear-gradient(to bottom right, #bfdbfe, #e0f2fe); /* Light blue gradient from Tailwind colors */
+            background-attachment: fixed; /* Ensures gradient covers full height */
+        }
+
+        /* Style for the generated content area */
+        #results-container {
+            min-height: 200px;
+            white-space: pre-wrap;
+        }
+
+        /* Basic Markdown Styling for rendered output */
+        #results-container h1, #results-container h2, #results-container h3 {
+            font-weight: bold;
+            margin-top: 1rem;
+            margin-bottom: 0.5rem;
+            color: #1e3a8a; /* Darker blue for headings in light mode context */
+        }
+        #results-container h2 { font-size: 1.5em; }
+        #results-container h3 { font-size: 1.25em; }
+        #results-container p { margin-bottom: 0.75rem; }
+        #results-container ul, #results-container ol {
+            list-style-position: inside;
+            margin-left: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+        #results-container ul { list-style-type: disc; }
+        #results-container ol { list-style-type: decimal; }
+        #results-container a { color: #3b82f6; text-decoration: underline; }
+
+        /* Animation for loading spinner */
+        .spinner {
+            border-top-color: #3b82f6;
+            -webkit-animation: spin 1s linear infinite;
+            animation: spin 1s linear infinite;
+        }
+
+        @-webkit-keyframes spin {
+            0% { -webkit-transform: rotate(0deg); }
+            100% { -webkit-transform: rotate(360deg); }
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Glassmorphism effect for cards */
+        .glass-card {
+            background-color: rgba(255, 255, 255, 0.2); /* Semi-transparent white */
+            backdrop-filter: blur(10px); /* Blur effect */
+            border: 1px solid rgba(255, 255, 255, 0.3); /* Light border */
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Subtle shadow */
+        }
+    </style>
+</head>
+<body class="text-slate-800 min-h-screen p-4 sm:p-8">
+
+    <div class="max-w-4xl mx-auto">
+        <!-- Header --><header class="text-center mb-8">
+            <h1 class="text-6xl font-extrabold text-exodus-accent tracking-tighter font-display">Exodus<span class="text-slate-900">AI</span></h1>
+            <p class="text-xl mt-2 text-slate-700">Grounded Intelligence for the Modern Web</p>
+        </header>
+
+        <!-- Search Form --><div class="mb-8 p-6 glass-card rounded-xl">
+            <div class="flex flex-col sm:flex-row gap-4">
+                <input
+                    type="text"
+                    id="search-input"
+                    placeholder="Ask ExodusAI anything... (e.g., 'What are the latest findings on personalized medicine?')"
+                    class="flex-grow p-4 text-slate-800 bg-white/50 border border-exodus-accent/30 rounded-lg focus:outline-none focus:border-exodus-accent transition duration-150 shadow-inner placeholder-slate-600"
+                />
+                <button
+                    id="search-button"
+                    onclick="handleSearch()"
+                    class="bg-exodus-accent hover:bg-exodus-accent-hover text-white font-semibold py-4 px-6 rounded-lg transition duration-300 shadow-lg hover:shadow-xl focus:outline-none disabled:opacity-50"
+                >
+                    <div id="loading-indicator" class="hidden w-5 h-5 border-2 border-white border-solid rounded-full spinner mx-auto"></div>
+                    <span id="button-text">Search</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Results Area --><section class="mt-8">
+            <h2 id="results-title" class="text-2xl font-bold mb-4 text-slate-800 border-b border-exodus-accent/50 pb-2 hidden">ExodusAI Response</h2>
+            <div id="results-card" class="glass-card p-6 rounded-xl min-h-[150px] transition-all duration-300">
+                <p id="initial-message" class="text-slate-600 text-center py-10">Your comprehensive, grounded results will appear here after your search.</p>
+                <!-- Generated content will be inserted here --><div id="results-container" class="prose max-w-none text-slate-800"></div>
+            </div>
+
+            <!-- Citations Area --><div id="citations-area" class="mt-6 p-4 glass-card rounded-lg hidden">
+                <h3 class="text-lg font-semibold mb-3 text-slate-800">Sources (Grounded Search)</h3>
+                <ul id="citations-list" class="list-none space-y-2 text-sm text-slate-700">
+                    <!-- Citations will be inserted here --></ul>
+            </div>
+        </section>
+
+    </div>
+
+    <script>
+        // Global variables required for the environment (even if not strictly used for state)
+        // These are guaranteed to exist in the canvas runtime environment
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        // Note: Firebase is not used in this search app, but we need an API key variable.
+        const apiKey = ""; // Canvas runtime provides this key
+
+        const searchInput = document.getElementById('search-input');
+        const searchButton = document.getElementById('search-button');
+        const resultsContainer = document.getElementById('results-container');
+        const resultsTitle = document.getElementById('results-title');
+        const citationsArea = document.getElementById('citations-area');
+        const citationsList = document.getElementById('citations-list');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const buttonText = document.getElementById('button-text');
+        const initialMessage = document.getElementById('initial-message');
+
+        // Event listener for the Enter key
+        searchInput.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault(); // Prevent form submission
+                handleSearch();
+            }
+        });
+
+        /**
+         * Renders the search results and citations.
+         * @param {string} text - The generated text response.
+         * @param {Array<{uri: string, title: string}>} sources - The citation sources.
+         */
+        function renderResults(text, sources) {
+            initialMessage.classList.add('hidden');
+            resultsTitle.classList.remove('hidden');
+
+            // Use innerHTML to allow the model's markdown formatting to be rendered (e.g., lists, bold)
+            resultsContainer.innerHTML = text;
+
+            citationsList.innerHTML = '';
+            if (sources && sources.length > 0) {
+                citationsArea.classList.remove('hidden');
+                sources.forEach((source, index) => {
+                    const listItem = document.createElement('li');
+                    listItem.className = 'flex items-start';
+                    listItem.innerHTML = `
+                        <span class="mr-2 text-exodus-accent flex-shrink-0">
+                            ${index + 1}.
+                        </span>
+                        <a href="${source.uri}" target="_blank" rel="noopener noreferrer" class="text-slate-700 hover:text-exodus-accent transition-colors">
+                            ${source.title || 'Untitled Source'}
+                            <span class="text-xs text-slate-500 ml-2 overflow-hidden overflow-ellipsis whitespace-nowrap inline-block max-w-[200px] sm:max-w-full">
+                                (${source.uri})
+                            </span>
+                        </a>
+                    `;
+                    citationsList.appendChild(listItem);
+                });
+            } else {
+                citationsArea.classList.add('hidden');
+            }
+        }
+
+        /**
+         * Handles the search button click and keydown event.
+         */
+        async function handleSearch() {
+            const userQuery = searchInput.value.trim();
+            if (!userQuery) return;
+
+            // Clear previous results and show loading state
+            resultsContainer.innerHTML = '';
+            citationsArea.classList.add('hidden');
+            initialMessage.classList.remove('hidden');
+            resultsTitle.classList.add('hidden');
+            setLoading(true);
+
+            try {
+                const response = await generateGroundedContent(userQuery);
+                const candidate = response.candidates?.[0];
+
+                if (candidate && candidate.content?.parts?.[0]?.text) {
+                    const text = candidate.content.parts[0].text;
+                    let sources = [];
+
+                    // Extract grounding sources
+                    const groundingMetadata = candidate.groundingMetadata;
+                    if (groundingMetadata && groundingMetadata.groundingAttributions) {
+                        sources = groundingMetadata.groundingAttributions
+                            .map(attribution => ({
+                                uri: attribution.web?.uri,
+                                title: attribution.web?.title,
+                            }))
+                            .filter(source => source.uri && source.title);
+                    }
+
+                    renderResults(text, sources);
+                } else {
+                    renderResults("Sorry, ExodusAI could not generate a response for that query. Please try rephrasing your question.", []);
+                }
+            } catch (error) {
+                console.error('API Error:', error);
+                renderResults("An error occurred while connecting to the AI. Please check the console for details and try again.", []);
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        /**
+         * Sets the loading state of the UI.
+         * @param {boolean} isLoading
+         */
+        function setLoading(isLoading) {
+            searchButton.disabled = isLoading;
+            searchInput.disabled = isLoading;
+            if (isLoading) {
+                buttonText.classList.add('hidden');
+                loadingIndicator.classList.remove('hidden');
+                resultsContainer.innerHTML = `<p class="text-center text-slate-600 pt-10">Searching the web and synthesizing knowledge...</p>`;
+            } else {
+                buttonText.classList.remove('hidden');
+                loadingIndicator.classList.add('hidden');
+            }
+        }
+
+        /**
+         * Calls the Gemini API with Google Search grounding and exponential backoff.
+         * @param {string} userQuery
+         * @returns {Promise<object>} The JSON response from the API.
+         */
+        async function generateGroundedContent(userQuery) {
+            const model = 'gemini-2.5-flash-preview-09-2025';
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+            const systemPrompt = "You are ExodusAI, a powerful, grounded, and concise search assistant. Answer the user's query directly and comprehensively based on the provided search results. Format your output clearly using markdown.";
+
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }],
+                tools: [{ "google_search": {} }],
+                systemInstruction: {
+                    parts: [{ text: systemPrompt }]
+                },
+            };
+
+            const MAX_RETRIES = 5;
+            for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (response.ok) {
+                        return await response.json();
+                    } else if (response.status === 429 && attempt < MAX_RETRIES - 1) {
+                        // Implement exponential backoff for rate limiting (429)
+                        const delay = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        continue; // Retry the loop
+                    } else {
+                        throw new Error(`API returned status ${response.status}: ${response.statusText}`);
+                    }
+                } catch (error) {
+                    // Only retry on network errors or connection issues
+                    if (attempt < MAX_RETRIES - 1) {
+                        const delay = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        continue; // Retry the loop
+                    }
+                    throw error; // Throw after max retries
+                }
+            }
+            throw new Error('Failed to fetch content after maximum retries.');
+        }
+
+    </script>
+</body>
+</html>
